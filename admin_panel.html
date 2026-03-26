@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ali Baba | Administration</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { background: #f0f2f5; font-family: 'Segoe UI', sans-serif; }
+        .user-card { background: white; border-radius: 12px; border-left: 5px solid #ff6a00; }
+        .btn-action { transition: 0.2s; }
+        .btn-action:active { transform: scale(0.9); }
+    </style>
+</head>
+<body class="p-4 pb-20">
+
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-black text-slate-800 uppercase italic">Dashboard Admin</h1>
+        <button onclick="location.reload()" class="text-[#ff6a00]"><i class="fa-solid fa-rotate"></i></button>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <p class="text-[10px] uppercase font-bold text-slate-400">Total Utilisateurs</p>
+            <p id="totalUsers" class="text-xl font-black text-slate-800">...</p>
+        </div>
+        <div class="bg-[#ff6a00] p-4 rounded-xl shadow-sm text-white">
+            <p class="text-[10px] uppercase font-bold opacity-80">Volume Investi</p>
+            <p id="totalInvested" class="text-xl font-black text-white">...</p>
+        </div>
+    </div>
+
+    <div class="mb-6">
+        <input type="tel" id="searchPhone" placeholder="Rechercher par numéro..." 
+               class="w-full p-3 rounded-xl border-none shadow-sm focus:ring-2 focus:ring-[#ff6a00] outline-none">
+    </div>
+
+    <div id="usersList" class="space-y-4">
+        <p class="text-center text-slate-400 py-10 italic">Chargement de la base de données...</p>
+    </div>
+
+    <script>
+        const DB_URL = "https://alibaba-f22a0-default-rtdb.firebaseio.com/users";
+
+        async function fetchAllUsers() {
+            try {
+                const res = await fetch(`${DB_URL}.json`);
+                const data = await res.json();
+                
+                if (!data) {
+                    document.getElementById('usersList').innerHTML = "<p class='text-center text-slate-400 py-10'>Aucun utilisateur inscrit.</p>";
+                    return;
+                }
+
+                const usersArray = Object.values(data);
+                renderUsers(usersArray);
+                calculateStats(usersArray);
+            } catch (e) {
+                console.error("Erreur de connexion Firebase:", e);
+                document.getElementById('usersList').innerHTML = "<p class='text-center text-red-500 py-10'>Erreur de connexion.</p>";
+            }
+        }
+
+        function calculateStats(users) {
+            document.getElementById('totalUsers').innerText = users.length;
+            const total = users.reduce((acc, user) => acc + (user.totalInvested || 0), 0);
+            document.getElementById('totalInvested').innerText = `FC ${total.toLocaleString()}`;
+        }
+
+        function renderUsers(users) {
+            const list = document.getElementById('usersList');
+            list.innerHTML = "";
+
+            // On trie pour avoir les plus récents en haut
+            users.reverse().forEach(user => {
+                const card = document.createElement('div');
+                card.className = "user-card p-4 shadow-sm space-y-3";
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="font-black text-slate-800">${user.username || 'Utilisateur'}</p>
+                            <p class="text-xs text-slate-500 font-bold tracking-wider">+${user.phone}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs font-black text-[#ff6a00]">Solde: FC ${user.balance.toLocaleString()}</p>
+                            <p class="text-[9px] font-bold text-slate-400 uppercase">VIP Actif: ${user.vipActive || 'Aucun'}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-2 pt-2 border-t border-slate-50">
+                        <button onclick="editBalance('${user.phone}', ${user.balance})" 
+                                class="btn-action flex-1 bg-slate-800 text-white py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest">
+                            Modifier Solde
+                        </button>
+                        <button onclick="deleteUser('${user.phone}')" 
+                                class="btn-action bg-red-50 text-red-600 px-4 py-2 rounded-lg text-[10px]">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        async function editBalance(phone, currentBalance) {
+            const amount = prompt(`Nouveau solde pour +${phone} :`, currentBalance);
+            if (amount === null || amount === "") return;
+
+            try {
+                await fetch(`${DB_URL}/${phone}.json`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ balance: parseFloat(amount) })
+                });
+                alert("Modification enregistrée !");
+                fetchAllUsers();
+            } catch (e) { alert("Erreur lors de la mise à jour."); }
+        }
+
+        async function deleteUser(phone) {
+            if (!confirm(`Attention ! Supprimer définitivement l'utilisateur +${phone} ?`)) return;
+            try {
+                await fetch(`${DB_URL}/${phone}.json`, { method: 'DELETE' });
+                alert("Compte supprimé avec succès.");
+                fetchAllUsers();
+            } catch (e) { alert("Erreur de suppression."); }
+        }
+
+        document.getElementById('searchPhone').addEventListener('input', async (e) => {
+            const val = e.target.value;
+            const res = await fetch(`${DB_URL}.json`);
+            const data = await res.json();
+            if(!data) return;
+            const filtered = Object.values(data).filter(u => u.phone.includes(val) || (u.username && u.username.toLowerCase().includes(val.toLowerCase())));
+            renderUsers(filtered);
+        });
+
+        window.onload = fetchAllUsers;
+    </script>
+</body>
+</html>
